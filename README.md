@@ -23,12 +23,16 @@ A CUBLAS Matrix Multiply (GEMM) example.
 
 ## Run:
     a) Run:
-        run as ./prog dev nt n comptype mode
-        dev:      Device ID
-        nt:       Number of CPU threads (accelerates data init and CPU mode)
-        n:        Matrix size of n x n
-        comptype: GPU CUBLAS mode
-        mode:     CPU=0,  GPU=1
+            run as ./prog dev nt n comptype mode
+            
+            dev:      Device ID
+            nt:       Number of CPU threads (accelerates data init and CPU mode)
+            m:        Matrix size of M
+            n:        Matrix size of N
+            k:        Matrix size of K
+            comptype: GPU CUBLAS mode
+            mode:     CPU=0,  GPU=1
+            loop:     GPU CUBLAS loop kernel
 
     b) CUBLAS Compute Types:
             0  = CUBLAS_COMPUTE_16F
