@@ -9,7 +9,7 @@ A CUBLAS Matrix Multiply (GEMM) example.
 
 ## Install and Compile:
 	a) Clone Repo:
-        git clone https://github.com/temporal-hpc/cublas-gemm
+        git clone https://github.com/Linus-Voss/cublas-gemm.git
 
 	b) Compile:
         cd cublas-gemm
