@@ -115,7 +115,7 @@ void print_matrix(T *mat, int M, int N, const char *msg){
         printf("%s:\n", msg);
         for(int i=0; i<M; ++i){
             for(int j=0; j<N; ++j){
-                printf("%6.3f ", (float)mat[i*M + j]);
+                printf("%6.3f ", (float)mat[i*N + j]);
             }
             printf("\n");
         }
@@ -157,11 +157,11 @@ void fillMatrixRand(T *m, unsigned long nelem){
 }
 
 template <typename T1, typename T2>
-void copyMatrix(T1 *mTo, T2 *mFrom, int n){
+void copyMatrix(T1 *mTo, T2 *mFrom, int row,int col){
     #pragma omp parallel for
-    for (int i = 0; i < n; ++i) {
-        for (int j = 0; j < n; ++j) {
-            long q = i*n+j;
+    for (int i = 0; i < row; ++i) {
+        for (int j = 0; j < col; ++j) {
+            long q = i*col+j;
             mTo[q] = (T1)mFrom[q];
         }
     }
@@ -183,19 +183,19 @@ double computeMaxError(T *goldC, CTYPE *C, int N){
 }
 
 template <typename T>
-T* cblas_compute(int N, unsigned long nelem, CTYPE alpha, CTYPE beta, ATYPE *h_A, BTYPE *h_B, const char *dtypeCPU, bool verb){
+T* cblas_compute(int M,int N,int K, unsigned long nelemA,unsigned long nelemB,unsigned long nelemC, CTYPE alpha, CTYPE beta, ATYPE *h_A, BTYPE *h_B, const char *dtypeCPU, bool verb){
     double TFLOP = 2.0*(double)N*(double)N*(double)N * 1E-12;
     //printf("[CBLAS] Host mallocs A B C............."); fflush(stdout);
     double t1 = omp_get_wtime();
-    T *cblasA = (T*)(malloc(nelem * sizeof(T)));
-    T *cblasB = (T*)(malloc(nelem * sizeof(T)));
-    T *cblasC = (T*)(malloc(nelem * sizeof(T)));
+    T *cblasA = (T*)(malloc(nelemA * sizeof(T)));
+    T *cblasB = (T*)(malloc(nelemB * sizeof(T)));
+    T *cblasC = (T*)(malloc(nelemC * sizeof(T)));
     double t2 = omp_get_wtime();
     //printf("done: %f secs\n", t2-t1); fflush(stdout);
     //printf("[CBLAS] Filling matrices in Host......."); fflush(stdout);
     t1 = omp_get_wtime();
-    copyMatrix<T, ATYPE>(cblasA, h_A, N);
-    copyMatrix<T, BTYPE>(cblasB, h_B, N);
+    copyMatrix<T, ATYPE>(cblasA, h_A, M,K);
+    copyMatrix<T, BTYPE>(cblasB, h_B, K,N);
     t2 = omp_get_wtime();
     //printf("done: %f secs\n", t2-t1); fflush(stdout);
     t1 = omp_get_wtime();
@@ -203,15 +203,17 @@ T* cblas_compute(int N, unsigned long nelem, CTYPE alpha, CTYPE beta, ATYPE *h_A
         printf("[CBLAS] CPU GEMM (%6s)......", dtypeCPU); fflush(stdout);
     }
     #ifdef CPUFP64
-      cblas_dgemm(CblasColMajor,CblasNoTrans,CblasNoTrans,N,N,N,alpha,cblasA,N,cblasB,N,beta,cblasC,N);
+    //   cblas_dgemm(CblasColMajor,CblasNoTrans,CblasNoTrans,M,N,K,alpha,cblasA,M,cblasB,K,beta,cblasC,M);
+        cblas_dgemm(CblasColMajor,CblasNoTrans,CblasNoTrans,N,M,K,alpha,cblasB,N,cblasA,K,beta,cblasC,N);
     #else
-      cblas_sgemm(CblasColMajor,CblasNoTrans,CblasNoTrans,N,N,N,alpha,cblasA,N,cblasB,N,beta,cblasC,N);
+    //   cblas_sgemm(CblasColMajor,CblasNoTrans,CblasNoTrans,M,N,K,alpha,cblasA,M,cblasB,K,beta,cblasC,M);
+        cblas_sgemm(CblasColMajor,CblasNoTrans,CblasNoTrans,N,M,K,alpha,cblasB,N,cblasA,K,beta,cblasC,N);
     #endif
     t2 = omp_get_wtime();
     double cpuTFLOPS = TFLOP/(t2-t1);
     if(verb){
         printf("done: %f secs [%f TFLOPS]\n\n", t2-t1, cpuTFLOPS); fflush(stdout);
     }
-    print_matrix<T>(cblasC, N, N, "RESULT MAT C (CPU)");
+    print_matrix<T>(cblasC, N, M, "RESULT MAT C (CPU)");
     return cblasC;
 }
