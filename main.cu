@@ -13,7 +13,7 @@
 #include <cuda_fp16.h>
 
 #define LIM_CHECK_N 4096
-#define LIM_PRINT_N 32
+#define LIM_PRINT_N 256
 // fraction error   1.0 is 100% 
 #define TOLERR 0.0001
 #ifdef CPUFP64
@@ -27,27 +27,32 @@ using namespace std;
 
 int main(int argc, char **argv) {
   cublasStatus_t status;
-  if(argc != 6){
+  if(argc != 9){
       fprintf(stderr, "run as ./prog dev nt n comptype mode\n\n"
               "dev:      Device ID\n"
               "nt:       Number of CPU threads (accelerates data init and CPU mode)\n"
-              "n:        Matrix size of n x n\n"
+              "m:        Matrix size of M \n"
+              "n:        Matrix size of N \n"
+              "k:        Matrix size of K \n"
               "comptype: GPU CUBLAS mode\n"
-              "mode:     CPU=0,  GPU=1\n\n");
-
+              "mode:     CPU=0,  GPU=1\n"
+              "loop:     GPU CUBLAS loop kernel\n\n");
       printArgsInfo();
       return EXIT_FAILURE;
   }
   float gputime_ms;
   int dev = atoi(argv[1]);
   int nt = atoi(argv[2]);
-  int N = atoi(argv[3]);
-  int comptype = atoi(argv[4]);
-  int mode = atoi(argv[5]);
+  int M = atoi(argv[3]);
+  int N = atoi(argv[4]);
+  int K = atoi(argv[5]);
+  int comptype = atoi(argv[6]);
+  int mode = atoi(argv[7]);
+  int loop = atoi(argv[8]);
   printf("\n*********************************************\n"
          "******** CUBLAS Example by Temporal *********\n"
          "*********************************************\n\n");
-  printf("dev=%i, nt=%i, n=%i, cublasType=%i, <mode = %i -> %s>\n\n", dev, nt, N, comptype, mode, mode == 0? "CPU" : "GPU");
+  printf("dev=%i, nt=%i, m=%i, n=%i, k=%i, cublasType=%i, <mode = %i -> %s>\n\n", dev, nt, M,N,K, comptype, mode, mode == 0? "CPU" : "GPU");
   // host pointers
   ATYPE *h_A;
   BTYPE *h_B;
@@ -61,10 +66,12 @@ int main(int argc, char **argv) {
   CTYPE alpha = 1.0f;
   CTYPE beta = 0.0f;
   // number of elements
-  unsigned long nelem = (unsigned long)N * (unsigned long)N;
-  double GBytesUsed = (double)nelem*(sizeof(ATYPE) + sizeof(BTYPE) + sizeof(CTYPE))/1e9;
+  unsigned long nelemA = (unsigned long)M * (unsigned long)K;
+  unsigned long nelemB = (unsigned long)K * (unsigned long)N;
+  unsigned long nelemC = (unsigned long)M * (unsigned long)N;
+  double GBytesUsed = ((double)nelemA*sizeof(ATYPE) + (double)nelemB*sizeof(BTYPE) + (double)nelemC*sizeof(CTYPE))/1e9;
   double t1, t2;
-  double TFLOP = 2.0*(double)N*(double)N*(double)N * 1E-12;
+  double TFLOP = 2.0*(double)M*(double)N*(double)K * 1E-12;
   int bitsA = sizeof(ATYPE)*8;
   int bitsB = sizeof(BTYPE)*8;
   int bitsC = sizeof(CTYPE)*8;
@@ -85,10 +92,10 @@ int main(int argc, char **argv) {
   cudaEventCreate(&stop);
   cublasHandle_t handle;
   omp_set_num_threads(nt);
-  printf("Matrix size %i x %i --> %lu elements\n"
+  printf("Matrix size MNK %i %i %i --> %lu nelemA %lu nelemB %lu nelemC\n"
           "GPU: A FP%i (%10s), B FP%i (%10s), C FP%i (%10s)\n"
           "CPU: A FP%i (%10s), B FP%i (%10s), C FP%i (%10s)\n\n", 
-          N, N, nelem,  
+          M, N, K, nelemA, nelemB, nelemC,
           bitsA, dtypeAStr,
           bitsB, dtypeBStr,
           bitsC, dtypeCStr, 
@@ -127,42 +134,42 @@ int main(int argc, char **argv) {
   printf("Host mallocs A B C............."); fflush(stdout);
   t1 = omp_get_wtime();
   #ifdef PINNED
-      cudaMallocHost((void**)&h_A, nelem*sizeof(h_A[0]));
-      cudaMallocHost((void**)&h_B, nelem*sizeof(h_B[0]));
-      cudaMallocHost((void**)&h_C, nelem*sizeof(h_C[0]));
+      cudaMallocHost((void**)&h_A, nelemA*sizeof(h_A[0]));
+      cudaMallocHost((void**)&h_B, nelemB*sizeof(h_B[0]));
+      cudaMallocHost((void**)&h_C, nelemC*sizeof(h_C[0]));
   #else
-      h_A = (ATYPE*)(malloc(nelem * sizeof(h_A[0])));
-      h_B = (BTYPE*)(malloc(nelem * sizeof(h_B[0])));
-      h_C = (CTYPE*)(malloc(nelem * sizeof(h_C[0])));
+      h_A = (ATYPE*)(malloc(nelemA * sizeof(h_A[0])));
+      h_B = (BTYPE*)(malloc(nelemB * sizeof(h_B[0])));
+      h_C = (CTYPE*)(malloc(nelemC * sizeof(h_C[0])));
   #endif
 
   t2 = omp_get_wtime();
   printf("done: %f secs\n", t2-t1); fflush(stdout);
   printf("Filling matrices in Host......."); fflush(stdout);
   t1 = omp_get_wtime();
-  fillMatrixRand<ATYPE>(h_A, nelem);
-  fillMatrixRand<BTYPE>(h_B, nelem);
-  fillMatrixRand<CTYPE>(h_C, nelem);
+  fillMatrixRand<ATYPE>(h_A, nelemA);
+  fillMatrixRand<BTYPE>(h_B, nelemB);
+  fillMatrixRand<CTYPE>(h_C, nelemC);
   t2 = omp_get_wtime();
   printf("done: %f secs\n", t2-t1); fflush(stdout);
-  print_matrix<ATYPE>(h_A, N, N, "MAT A");
-  print_matrix<BTYPE>(h_B, N, N, "MAT B");
+  print_matrix<ATYPE>(h_A, M, K, "MAT A");
+  print_matrix<BTYPE>(h_B, K, N, "MAT B");
 
 
   /* 4) Allocate device memory for the matrices */
   printf("Device mallocs A B C..........."); fflush(stdout);
   t1 = omp_get_wtime();
-  if (cudaMalloc(reinterpret_cast<void **>(&d_A), nelem * sizeof(d_A[0])) != cudaSuccess) {
+  if (cudaMalloc(reinterpret_cast<void **>(&d_A), nelemA * sizeof(d_A[0])) != cudaSuccess) {
         fprintf(stderr, "!!!! device memory allocation error (allocate A)\n");
         return EXIT_FAILURE;
   }
 
-  if (cudaMalloc(reinterpret_cast<void **>(&d_B), nelem * sizeof(d_B[0])) != cudaSuccess) {
+  if (cudaMalloc(reinterpret_cast<void **>(&d_B), nelemB * sizeof(d_B[0])) != cudaSuccess) {
     fprintf(stderr, "!!!! device memory allocation error (allocate B)\n");
     return EXIT_FAILURE;
   }
 
-  if (cudaMalloc(reinterpret_cast<void **>(&d_C), nelem * sizeof(d_C[0])) != cudaSuccess) {
+  if (cudaMalloc(reinterpret_cast<void **>(&d_C), nelemC * sizeof(d_C[0])) != cudaSuccess) {
     fprintf(stderr, "!!!! device memory allocation error (allocate C)\n");
     return EXIT_FAILURE;
   }
@@ -174,36 +181,36 @@ int main(int argc, char **argv) {
   /* 5) Initialize the device matrices with the host matrices */
   printf("Host -> Device memcpy A........"); fflush(stdout);
   t1 = omp_get_wtime();
-  status = cublasSetVector(nelem, sizeof(h_A[0]), h_A, 1, d_A, 1);
+  status = cublasSetVector(nelemA, sizeof(h_A[0]), h_A, 1, d_A, 1);
   if (status != CUBLAS_STATUS_SUCCESS) {
     fprintf(stderr, "!!!! device access error (write A)\n");
     return EXIT_FAILURE;
   }
   gpuErrchk(cudaDeviceSynchronize());
   t2 = omp_get_wtime();
-  printf("done: %f secs (%f GB/sec)\n", t2-t1, nelem*sizeof(h_A[0])/(1e9 * (t2-t1))); fflush(stdout);
+  printf("done: %f secs (%f GB/sec)\n", t2-t1, nelemA*sizeof(h_A[0])/(1e9 * (t2-t1))); fflush(stdout);
 
   printf("Host -> Device memcpy B........"); fflush(stdout);
   t1 = omp_get_wtime();
-  status = cublasSetVector(nelem, sizeof(h_B[0]), h_B, 1, d_B, 1);
+  status = cublasSetVector(nelemB, sizeof(h_B[0]), h_B, 1, d_B, 1);
   if (status != CUBLAS_STATUS_SUCCESS) {
     fprintf(stderr, "!!!! device access error (write B)\n");
     return EXIT_FAILURE;
   }
   gpuErrchk(cudaDeviceSynchronize());
   t2 = omp_get_wtime();
-  printf("done: %f secs (%f GB/sec)\n", t2-t1, nelem*sizeof(h_B[0])/(1e9 * (t2-t1))); fflush(stdout);
+  printf("done: %f secs (%f GB/sec)\n", t2-t1, nelemB*sizeof(h_B[0])/(1e9 * (t2-t1))); fflush(stdout);
 
   printf("Host -> Device memcpy C........"); fflush(stdout);
   t1 = omp_get_wtime();
-  status = cublasSetVector(nelem, sizeof(h_C[0]), h_C, 1, d_C, 1);
+  status = cublasSetVector(nelemC, sizeof(h_C[0]), h_C, 1, d_C, 1);
   if (status != CUBLAS_STATUS_SUCCESS) {
     fprintf(stderr, "!!!! device access error (write C)\n");
     return EXIT_FAILURE;
   }
   gpuErrchk(cudaDeviceSynchronize());
   t2 = omp_get_wtime();
-  printf("done: %f secs (%f GB/sec)\n\n", t2-t1, nelem*sizeof(h_C[0])/(1e9 * (t2-t1))); fflush(stdout);
+  printf("done: %f secs (%f GB/sec)\n\n", t2-t1, nelemC*sizeof(h_C[0])/(1e9 * (t2-t1))); fflush(stdout);
 
 
 
@@ -214,12 +221,34 @@ int main(int argc, char **argv) {
   /* 6) GEMM -> GPU CUBLAS */
   if(mode==1){
       printf("[CUBLAS] GPU GEMM.............."); fflush(stdout);
+
+      //Warning: 
+      // for(uint i=0; i<5; i++)
+      // {
+      //   status = cublasGemmEx(handle, CUBLAS_OP_N, CUBLAS_OP_N, N, M, K, &alpha,
+      //                                     d_B, dtypeA, N,
+      //                                     d_A, dtypeB, K,
+      //                           &beta,    d_C, dtypeC, N, cublasComputeTypes[comptype],  CUBLAS_GEMM_DEFAULT_TENSOR_OP);
+      //   }
+      //   if(status != CUBLAS_STATUS_SUCCESS){
+      //   fprintf(stderr, "!!!! kernel execution error.\n");
+      //   return EXIT_FAILURE;
+      // }
+
       gpuErrchk(cudaEventRecord(start));
-      status = cublasGemmEx(handle, CUBLAS_OP_N, CUBLAS_OP_N, N, N, N, &alpha,
-                                        d_A, dtypeA, N,
-                                        d_B, dtypeB, N,
-                              &beta,    d_C, dtypeC, N, cublasComputeTypes[comptype],  CUBLAS_GEMM_DEFAULT_TENSOR_OP);
-      if(status != CUBLAS_STATUS_SUCCESS){
+      for(uint i=0; i<loop; i++)
+      {
+
+        // status = cublasGemmEx(handle, CUBLAS_OP_N, CUBLAS_OP_N, M, N, K, &alpha,
+        //                                   d_A, dtypeA, M,
+        //                                   d_B, dtypeB, K,
+        //                         &beta,    d_C, dtypeC, M, cublasComputeTypes[comptype],  CUBLAS_GEMM_DEFAULT_TENSOR_OP);
+        status = cublasGemmEx(handle, CUBLAS_OP_N, CUBLAS_OP_N, N, M, K, &alpha,
+                                          d_B, dtypeA, N,
+                                          d_A, dtypeB, K,
+                                &beta,    d_C, dtypeC, N, cublasComputeTypes[comptype],  CUBLAS_GEMM_DEFAULT_TENSOR_OP);
+        }
+        if(status != CUBLAS_STATUS_SUCCESS){
         fprintf(stderr, "!!!! kernel execution error.\n");
         return EXIT_FAILURE;
       }
@@ -227,8 +256,9 @@ int main(int argc, char **argv) {
       gpuErrchk(cudaEventRecord(stop));
       gpuErrchk(cudaEventSynchronize(stop));
       gpuErrchk(cudaEventElapsedTime(&gputime_ms, start, stop));
-      double gpuTFLOPS = TFLOP/(gputime_ms/1000.0);
-      printf("done: %f secs [%f TFLOPS]\n", gputime_ms/1000.0, gpuTFLOPS); fflush(stdout);
+      double gpuTFLOPS = TFLOP/((gputime_ms/loop)/1000.0);
+      double gpuGBPS   = ( ((nelemA+nelemB)*sizeof(h_A[0]))/1000000000.0f )/((gputime_ms/loop)/1000.0);
+      printf("done: %f ms [%f TFLOPS] [%f GB/s]\n", 1.0f*gputime_ms/loop, gpuTFLOPS,gpuGBPS); fflush(stdout);
   }
 
 
@@ -237,7 +267,7 @@ int main(int argc, char **argv) {
 
   /* 7) GEMM -> CPU BASIC */
   if(mode == 0){
-      cblasC = cblas_compute<CPUTYPE>(N, nelem, alpha, beta, h_A, h_B, dtypeCPU, true); 
+      cblasC = cblas_compute<CPUTYPE>(M,N,K, nelemA,nelemB,nelemC, alpha, beta, h_A, h_B, dtypeCPU, true); 
       /*
       //printf("[CBLAS] Host mallocs A B C............."); fflush(stdout);
       t1 = omp_get_wtime();
@@ -275,14 +305,14 @@ int main(int argc, char **argv) {
   if(mode == 1){
       printf("Device -> Host memcpy C........"); fflush(stdout);
       t1 = omp_get_wtime();
-      status = cublasGetVector(nelem, sizeof(h_C[0]), d_C, 1, h_C, 1);
+      status = cublasGetVector(nelemC, sizeof(h_C[0]), d_C, 1, h_C, 1);
       if (status != CUBLAS_STATUS_SUCCESS) {
         fprintf(stderr, "!!!! device access error (read C)\n");
         return EXIT_FAILURE;
       }
       t2 = omp_get_wtime();
-      printf("done: %f secs (%f GB/sec)\n", t2-t1, nelem*sizeof(h_C[0])/(1e9*(t2-t1))); fflush(stdout);
-      print_matrix<CTYPE>(h_C, N, N, "RESULT MAT C (GPU)");
+      printf("done: %f secs (%f GB/sec)\n", t2-t1, nelemC*sizeof(h_C[0])/(1e9*(t2-t1))); fflush(stdout);
+      print_matrix<CTYPE>(h_C, N, M, "RESULT MAT C (GPU)");
   }
 
 
@@ -292,7 +322,7 @@ int main(int argc, char **argv) {
   if(mode == 1 && N <= LIM_CHECK_N){
       printf("Verify result.................."); fflush(stdout);
       t1 = omp_get_wtime();
-      cblasC = cblas_compute<CPUTYPE>(N, nelem, alpha, beta, h_A, h_B, dtypeCPU, false); 
+      cblasC = cblas_compute<CPUTYPE>(M,N,K, nelemA,nelemB,nelemC, alpha, beta, h_A, h_B, dtypeCPU, false); 
       double maxError = computeMaxError<CPUTYPE>(cblasC, h_C, N); 
       t2 = omp_get_wtime();
       printf("done: %f secs (maxError = %f%%, TOL = %f%%)\n%s\n\n", t2-t1,
