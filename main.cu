@@ -62,9 +62,10 @@ int main(int argc, char **argv) {
   ATYPE *d_A = 0;
   BTYPE *d_B = 0;
   CTYPE *d_C = 0;
-  // constants
-  CTYPE alpha = 1.0f;
-  CTYPE beta = 0.0f;
+  // constants,compute types
+  CPTYPE alpha = 1.0f;
+  CPTYPE beta  = 0.0f;
+  
   // number of elements
   unsigned long nelemA = (unsigned long)M * (unsigned long)K;
   unsigned long nelemB = (unsigned long)K * (unsigned long)N;
@@ -234,7 +235,8 @@ int main(int argc, char **argv) {
       //   fprintf(stderr, "!!!! kernel execution error.\n");
       //   return EXIT_FAILURE;
       // }
-
+      int incx =1;
+      int incy =1;
       gpuErrchk(cudaEventRecord(start));
       for(uint i=0; i<loop; i++)
       {
@@ -246,7 +248,13 @@ int main(int argc, char **argv) {
         status = cublasGemmEx(handle, CUBLAS_OP_N, CUBLAS_OP_N, N, M, K, &alpha,
                                           d_B, dtypeA, N,
                                           d_A, dtypeB, K,
-                                &beta,    d_C, dtypeC, N, cublasComputeTypes[comptype],  CUBLAS_GEMM_DEFAULT_TENSOR_OP);
+                                &beta,    d_C, dtypeC, N,cublasComputeTypes[comptype],  CUBLAS_GEMM_DEFAULT_TENSOR_OP);
+        // status = cublasSgemv(handle, CUBLAS_OP_N,  M, K, &alpha,
+        //                              d_A, M,
+        //                              d_B, incx,
+        //                              &beta,    
+        //                              d_C,  incy);
+
         }
         if(status != CUBLAS_STATUS_SUCCESS){
         fprintf(stderr, "!!!! kernel execution error.\n");
