@@ -18,7 +18,7 @@ A CUBLAS Matrix Multiply (GEMM) example.
     c) Data Types:
         You can specify the data type (half, float) for each matrix
         Example:
-        make ATYPE=half BTYPE=half CTYPE=hal
+        make ATYPE=half BTYPE=half CTYPE=half CPTYPE=half
         
 
 ## Run:
@@ -30,7 +30,7 @@ A CUBLAS Matrix Multiply (GEMM) example.
             m:        Matrix size of M
             n:        Matrix size of N
             k:        Matrix size of K
-            comptype: GPU CUBLAS mode
+            comptype: GPU CUBLAS mode (should be same witch CPTYPE)
             mode:     CPU=0,  GPU=1
             loop:     GPU CUBLAS loop kernel
 
@@ -48,22 +48,20 @@ A CUBLAS Matrix Multiply (GEMM) example.
             10 = CUBLAS_COMPUTE_32I_PEDANTIC
 
 ## Example executions:
-    a) [GPU CUBLAS] Default CUBLAS math (FP32 CUDA cores)
-        make ATYPE=float BTYPE=float CTYPE=float
-        ./prog 0 4 $((2**13)) 2 1
+    a) make ATYPE=float BTYPE=float CTYPE=float CPTYPE=float
+        ./prog 0 4 8192 8192 8192 2 1 10000
 
-    b) [GPU CUBLAS] Tensor Cores with mixed precision
-        make ATYPE=half BTYPE=half CTYPE=float
-        ./prog 0 4 $((2**13)) 4 1
+    b) make ATYPE=half BTYPE=half CTYPE=half CPTYPE=half
+        ./prog 0 4 8192 8192 8192 0 1 10000
+	
+    c) make ATYPE=half BTYPE=half CTYPE=half CPTYPE=float
+        ./prog 0 4 8192 8192 8192 0 2 10000
 
-    c) [GPU CUBLAS] Tensor Cores with FP16
-        make ATYPE=half BTYPE=half CTYPE=half
-        ./prog 0 4 $((2**13)) 0 1
 
     d) [CPU CBLAS] FP32 Using 8 CPU threads 
         make
-        ./prog 0 8 $((2**13)) 0 0
+	./prog 0 8 8192 8192 8192 0 0 
 
     e) [CPU CBLAS] FP64 Using 8 CPU threads 
         make CPUFP64=CPUFP64
-        ./prog 0 8 $((2**13)) 0 0
+       ./prog 0 8 8192 8192 8192 0 0 
