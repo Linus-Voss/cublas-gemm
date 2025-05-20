@@ -1,0 +1,64 @@
+# run as ./prog dev nt n comptype mode
+
+# dev:      Device ID
+# nt:       Number of CPU threads (accelerates data init and CPU mode)
+# m:        Matrix size of M
+# n:        Matrix size of N
+# k:        Matrix size of K
+# comptype: GPU CUBLAS mode
+# mode:     CPU=0,  GPU=1
+# loop:     GPU CUBLAS loop kernel
+
+# CUBLAS Compute Types:
+# 0 = CUBLAS_COMPUTE_16F
+# 1 = CUBLAS_COMPUTE_16F_PEDANTIC
+# 2 = CUBLAS_COMPUTE_32F
+# 3 = CUBLAS_COMPUTE_32F_PEDANTIC
+# 4 = CUBLAS_COMPUTE_32F_FAST_16F
+# 5 = CUBLAS_COMPUTE_32F_FAST_16BF
+# 6 = CUBLAS_COMPUTE_32F_FAST_TF32
+# 7 = CUBLAS_COMPUTE_64F
+# 8 = CUBLAS_COMPUTE_64F_PEDANTIC
+# 9 = CUBLAS_COMPUTE_32I
+# 10 = CUBLAS_COMPUTE_32I_PEDANTIC
+
+# DeepSeek GEMM size
+./prog 0 4 16 2112 7168 0 1 10000
+./prog 0 4 16 24576 1536 0 1 10000
+./prog 0 4 16 3072 1536 0 1 10000
+./prog 0 4 16 32768 512 0 1 10000
+./prog 0 4 16 7168 16384 0 1 10000
+./prog 0 4 16 4096 7168 0 1 10000
+./prog 0 4 16 7168 2048 0 1 10000
+
+
+./prog 0 4 32 2112 7168 0 1 10000
+./prog 0 4 32 24576 1536 0 1 10000
+./prog 0 4 32 3072 1536 0 1 10000
+./prog 0 4 32 32768 512 0 1 10000
+./prog 0 4 32 7168 16384 0 1 10000
+./prog 0 4 32 4096 7168 0 1 10000
+./prog 0 4 32 7168 2048 0 1 10000
+
+./prog 0 4 64 2112 7168 0 1 10000
+./prog 0 4 64 24576 1536 0 1 10000
+./prog 0 4 64 3072 1536 0 1 10000
+./prog 0 4 64 32768 512 0 1 10000
+./prog 0 4 64 7168 16384 0 1 10000
+./prog 0 4 64 4096 7168 0 1 10000
+./prog 0 4 64 7168 2048 0 1 10000
+
+./prog 0 4 128 2112 7168 0 1 10000
+./prog 0 4 128 24576 1536 0 1 10000
+./prog 0 4 128 3072 1536 0 1 10000
+./prog 0 4 128 32768 512 0 1 10000
+./prog 0 4 128 7168 16384 0 1 10000
+./prog 0 4 128 4096 7168 0 1 10000
+./prog 0 4 128 7168 2048 0 1 10000
+
+
+./prog 0 4 4096 4096 4096  0 1 10000
+./prog 0 4 8192 8192 8192  0 1 10000
+./prog 0 4 16384 16384 16384  0 1 10000
+./prog 0 4 16 16384 16384  0 1 10000
+./prog 0 4 16 32768 32768  0 1 10000
